@@ -33,7 +33,7 @@ A web application that allows multiple users to roll various types of dice in sh
 ### Prerequisites
 
 *   Node.js (v14.x or later recommended)
-*   Microsoft Visual C++ Build Tools
+*   Microsoft Visual C++ Build Tools (Windows)
 
 ### Backend Setup
 
