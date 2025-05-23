@@ -1,0 +1,12 @@
+
+.env
+
+.vite/
+
+dice-roller-backend/package-lock.json
+
+node_modules/
+
+pnpm-lock.yaml
+
+pnpm-workspace.yaml
