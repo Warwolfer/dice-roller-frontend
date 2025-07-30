@@ -14,7 +14,7 @@
         </div>
         <p class="mt-1 text-slate-200">
           <span v-if="isActionRoll(roll)">
-            Used <span class="font-bold text-sky-400">{{ getActionName(roll) }}</span> and got 
+            Used <span class="font-bold text-sky-400">{{ getActionName(roll) }}</span> and rolled
             <span class="font-bold text-lg text-amber-400">{{ roll.result }}</span>
             <span class="text-xs text-slate-400 block mt-1">
               WR: {{ getWeaponRank(roll) }}, MR: {{ getMasteryRank(roll) }}

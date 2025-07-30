@@ -22,6 +22,7 @@ export interface RankOption {
   bonus: number;
 }
 
+// Default rank options - these will be updated from backend data when available
 export const RANK_OPTIONS: RankOption[] = [
   { label: 'E', value: Rank.E, bonus: 0 },
   { label: 'D', value: Rank.D, bonus: 10 },

@@ -82,14 +82,16 @@
         </Button>
       </div>
       <div 
-        v-if="animatedRollResult !== null" 
-        :class="[
-          'mt-4 text-center p-3 bg-slate-600 rounded-md',
-          { 'animate-pulse': !isAnimatingRoll }
-        ]"
+        v-if="isAnimatingRoll || animatedRollResult !== null" 
+        class="mt-4 text-center p-3 bg-slate-600 rounded-md"
       >
-        <span class="text-slate-300">You rolled: </span>
-        <span class="text-3xl font-bold text-amber-400">{{ animatedRollResult }}</span>
+        <span v-if="isAnimatingRoll" class="text-slate-300 animate-pulse">
+          Rolling...
+        </span>
+        <span v-else-if="animatedRollResult !== null">
+          <span class="text-slate-300">You rolled: </span>
+          <span class="text-3xl font-bold text-amber-400">{{ animatedRollResult }}</span>
+        </span>
       </div>
     </div>
 
@@ -105,6 +107,7 @@ import ActionSelector from './ActionSelector.vue'
 import RollHistory from './RollHistory.vue'
 import Button from './Button.vue'
 import { DICE_OPTIONS, RANK_OPTIONS } from '../constants'
+import { useActions } from '../composables/useActions'
 
 interface RoomViewProps {
   room: Room
@@ -118,6 +121,8 @@ const emit = defineEmits<{
   actionRoll: [roomId: string, action: Action, userName: string, weaponRank: Rank, masteryRank: Rank, comment?: string]
   leaveRoom: []
 }>()
+
+const { fetchActions } = useActions()
 
 // Roll type toggle
 const rollType = ref<'dice' | 'action'>('dice')
@@ -171,17 +176,6 @@ const onLeaveRoom = () => {
 const handleRoll = async () => {
   isAnimatingRoll.value = true
   animatedRollResult.value = null
-  
-  const rollAnimationDuration = 700 // ms
-  let interimRolls = 0
-  
-  // Animation logic depends on roll type
-  const maxValue = rollType.value === 'dice' ? selectedDice.value : 100
-  const animationInterval = setInterval(() => {
-    animatedRollResult.value = Math.floor(Math.random() * maxValue) + 1
-    interimRolls++
-    if (interimRolls >= 5) clearInterval(animationInterval)
-  }, rollAnimationDuration / 6)
 
   try {
     if (rollType.value === 'dice') {
@@ -192,29 +186,29 @@ const handleRoll = async () => {
     rollComment.value = '' // Clear comment input after emitting roll
   } catch (error) {
     console.error("Error during roll execution in RoomView:", error)
-    clearInterval(animationInterval)
+    isAnimatingRoll.value = false
     animatedRollResult.value = null
-  } finally {
-    setTimeout(() => {
-      isAnimatingRoll.value = false
-    }, 500)
   }
 }
+
+onMounted(() => {
+  fetchActions()
+})
 
 // Watch for changes in room id, selected dice, or roll type to reset animation
 watch([() => props.room.id, selectedDice, rollType], () => {
   animatedRollResult.value = null
+  isAnimatingRoll.value = false
 })
 
-// Watch for new rolls from the current user to update animation result
+// Watch for new rolls from the current user to show the result
 watch(() => props.room.rolls, (newRolls, oldRolls) => {
   if (newRolls.length > (oldRolls?.length || 0)) {
     const latestRoll = newRolls[0] // Rolls are sorted by timestamp desc
-    if (latestRoll.userName === props.userName && isAnimatingRoll.value) {
-      // Update animation result with actual roll result
-      setTimeout(() => {
-        animatedRollResult.value = latestRoll.result
-      }, 200) // Small delay to ensure animation interval is cleared
+    if (latestRoll.userName === props.userName) {
+      // Show the actual roll result and stop rolling animation
+      animatedRollResult.value = latestRoll.result
+      isAnimatingRoll.value = false
     }
   }
 }, { deep: true })

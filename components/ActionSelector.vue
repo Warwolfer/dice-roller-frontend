@@ -14,7 +14,7 @@
       >
         <option value="">Select Category</option>
         <option
-          v-for="category in ACTION_CATEGORIES"
+          v-for="category in categories"
           :key="category"
           :value="category"
         >
@@ -61,7 +61,7 @@
           class="flex-1 p-2 bg-slate-700 border border-slate-600 rounded-md focus:ring-sky-500 focus:border-sky-500 text-slate-100 disabled:opacity-50"
         >
           <option
-            v-for="rank in RANK_OPTIONS"
+            v-for="rank in rankOptions"
             :key="rank.value"
             :value="rank.value"
           >
@@ -83,7 +83,7 @@
           class="flex-1 p-2 bg-slate-700 border border-slate-600 rounded-md focus:ring-sky-500 focus:border-sky-500 text-slate-100 disabled:opacity-50"
         >
           <option
-            v-for="rank in RANK_OPTIONS"
+            v-for="rank in rankOptions"
             :key="rank.value"
             :value="rank.value"
           >
@@ -112,10 +112,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { Action, Rank } from '../types'
-import { ACTIONS, ACTION_CATEGORIES } from '../actions'
-import { RANK_OPTIONS } from '../constants'
+import { useActions } from '../composables/useActions'
 
 interface ActionSelectorProps {
   selectedAction: Action | null
@@ -131,11 +130,18 @@ const emit = defineEmits<{
   masteryRankChange: [rank: Rank]
 }>()
 
+const { actions, categories, fetchActions, getRankOptions, isLoading, error } = useActions()
+
+const rankOptions = computed(() => getRankOptions())
 const selectedCategory = ref<string>('')
+
+onMounted(() => {
+  fetchActions()
+})
 
 const filteredActions = computed(() => {
   if (!selectedCategory.value) return []
-  return ACTIONS.filter(action => action.category === selectedCategory.value)
+  return actions.filter(action => action.category === selectedCategory.value)
 })
 
 const onCategoryChange = (e: Event) => {
@@ -148,7 +154,7 @@ const onCategoryChange = (e: Event) => {
 const onActionChange = (e: Event) => {
   const target = e.target as HTMLSelectElement
   const actionName = target.value
-  const action = ACTIONS.find(a => a.name === actionName) || null
+  const action = actions.find(a => a.name === actionName) || null
   emit('actionChange', action)
 }
 
