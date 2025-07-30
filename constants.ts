@@ -33,4 +33,4 @@ export const RANK_OPTIONS: RankOption[] = [
 ];
 
 // Read API_BASE_URL from Vite environment variable with a fallback
-export const API_BASE_URL = import.meta.env.PUBLIC_API_BASE_URL || 'http://localhost:3001/api';
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
