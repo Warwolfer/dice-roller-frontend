@@ -23,3 +23,28 @@ export interface Room {
   name: string;
   rolls: Roll[];
 }
+
+export enum Rank {
+  E = 'E',
+  D = 'D',
+  C = 'C',
+  B = 'B',
+  A = 'A',
+  S = 'S'
+}
+
+export interface Action {
+  category: string;
+  name: string;
+  type: 'Roll' | 'Action' | 'Passive';
+  subtype: 'Damage' | 'Heal' | 'Bonus' | 'Mitigation' | '';
+  description: string;
+  rollFormula: string;
+}
+
+export interface ActionRoll extends Omit<Roll, 'diceType'> {
+  actionName: string;
+  weaponRank: Rank;
+  masteryRank: Rank;
+  rollFormula: string;
+}

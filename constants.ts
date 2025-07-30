@@ -1,5 +1,5 @@
 
-import { Dice } from './types';
+import { Dice, Rank } from './types';
 
 export interface DiceOption {
   label: string;
@@ -16,13 +16,20 @@ export const DICE_OPTIONS: DiceOption[] = [
   { label: '1d100', value: Dice.D100 },
 ];
 
-// Read API_BASE_URL from environment variable with a fallback
-// Ensure process and process.env are checked to avoid errors in environments where they might not exist.
-const getApiBaseUrl = () => {
-  if (typeof process !== 'undefined' && process.env && process.env.REACT_APP_API_BASE_URL) {
-    return process.env.REACT_APP_API_BASE_URL;
-  }
-  return 'http://localhost:3001/api'; // Default fallback
-};
+export interface RankOption {
+  label: string;
+  value: Rank;
+  bonus: number;
+}
 
-export const API_BASE_URL = getApiBaseUrl();
+export const RANK_OPTIONS: RankOption[] = [
+  { label: 'E', value: Rank.E, bonus: 0 },
+  { label: 'D', value: Rank.D, bonus: 10 },
+  { label: 'C', value: Rank.C, bonus: 20 },
+  { label: 'B', value: Rank.B, bonus: 30 },
+  { label: 'A', value: Rank.A, bonus: 40 },
+  { label: 'S', value: Rank.S, bonus: 50 },
+];
+
+// Read API_BASE_URL from Vite environment variable with a fallback
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
