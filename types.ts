@@ -14,6 +14,7 @@ export interface Roll {
   userName: string;
   diceType: Dice; // Stores the enum value, e.g., Dice.D20
   result: number;
+  rawDiceResult?: number; // Raw dice total before bonuses/modifiers
   timestamp: Date;
   comment?: string; // Optional comment for the roll
 }
@@ -42,9 +43,44 @@ export interface Action {
   rollFormula: string;
 }
 
+export interface DiceGroup {
+  type: string;
+  rolls: number[];
+  sum: number;
+  keepHighest?: number;
+  keepLowest?: number;
+}
+
+export interface BonusBreakdown {
+  type: string;
+  rank?: string;
+  value: number;
+  display: string;
+}
+
+export interface ModifierBreakdown {
+  type: string;
+  description: string;
+  value: number;
+  multiplier: number;
+  explosionRolls?: number[];
+}
+
+export interface RollDetails {
+  diceGroups: DiceGroup[];
+  bonusBreakdown: BonusBreakdown[];
+  modifierBreakdown: ModifierBreakdown[];
+  explosionRolls: number[];
+  rawDiceTotal: number;
+  baseTotal: number;
+  finalResult: number;
+  breakdown: string;
+}
+
 export interface ActionRoll extends Omit<Roll, 'diceType'> {
   actionName: string;
   weaponRank: Rank;
   masteryRank: Rank;
   rollFormula: string;
+  rollDetails?: RollDetails;
 }

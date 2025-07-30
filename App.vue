@@ -270,7 +270,6 @@ const handleCreateRoom = async (name: string) => {
 const handleSelectRoom = (id: string) => {
   activeRoomState.error = null
   activeRoomState.data = null
-  activeRoomState.isLoading = true
   setActiveRoomId(id)
 }
 

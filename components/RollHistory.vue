@@ -14,12 +14,22 @@
         </div>
         <p class="mt-1 text-slate-200">
           <span v-if="isActionRoll(roll)">
-            Used <span class="font-bold text-sky-400">{{ getActionName(roll) }}</span> and rolled
-            <span class="font-bold text-lg text-amber-400">{{ roll.result }}</span>
+            Used <span class="font-bold text-sky-400">{{ getActionName(roll) }}</span>
+            <div class="mt-1">
+              <span v-if="roll.rawDiceResult !== undefined" class="text-sm">
+                Raw dice: <span class="font-bold text-white">{{ roll.rawDiceResult }}</span>, 
+              </span>
+              Final result: <span class="font-bold text-lg text-amber-400">{{ roll.result }}</span>
+            </div>
             <span class="text-xs text-slate-400 block mt-1">
               WR: {{ getWeaponRank(roll) }}, MR: {{ getMasteryRank(roll) }}
               <span v-if="getRollFormula(roll)" class="block font-mono">{{ getRollFormula(roll) }}</span>
             </span>
+            <!-- Detailed roll breakdown -->
+            <div v-if="roll.rollDetails?.breakdown" class="mt-2 p-2 bg-slate-900/50 rounded text-xs font-mono text-green-400">
+              <div class="text-slate-300 mb-1">Calculation:</div>
+              <div class="break-all">{{ roll.rollDetails.breakdown }}</div>
+            </div>
           </span>
           <span v-else>
             Rolled a <span class="font-bold text-lg text-amber-400">{{ roll.result }}</span> on a {{ getDiceLabel(roll.diceType) }}
