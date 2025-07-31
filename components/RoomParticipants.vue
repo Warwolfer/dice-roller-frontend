@@ -24,7 +24,12 @@
       <div 
         v-for="participant in participants" 
         :key="participant.id"
-        class="p-3 bg-slate-800 rounded-lg border border-slate-700 hover:border-slate-600 transition-colors"
+        class="p-3 bg-slate-800 rounded-lg border transition-all duration-200 cursor-pointer"
+        :class="{
+          'border-sky-500 bg-sky-500/10': selectedParticipantFilter === participant.name,
+          'border-slate-700 hover:border-slate-600': selectedParticipantFilter !== participant.name
+        }"
+        @click="handleParticipantClick(participant.name)"
       >
         <!-- Header with avatar and name -->
         <div class="flex items-center space-x-3 mb-2">
@@ -91,39 +96,32 @@
         <!-- TerraRP Details -->
         <div v-if="participant.terraRP" class="space-y-2">
           <!-- Equipment -->
-          <div v-if="participant.terraRP.weapon_rank || participant.terraRP.armor_rank" class="flex flex-wrap gap-2">
+          <div v-if="participant.terraRP.weapon_rank || participant.terraRP.armor_rank" class="grid grid-cols-2 justify-between gap-1">
             <span 
               v-if="participant.terraRP.weapon_rank"
-              class="px-2 py-1 text-xs bg-red-600/20 text-red-300 rounded border border-red-600/30"
+              class="flex justify-between px-2 py-1 text-xs bg-red-600/20 text-red-300 rounded border border-red-600/30"
             >
-              <span class="font-bold text-yellow-400">{{ participant.terraRP.weapon_rank }}</span> Weapon
+              Weapon <span class="font-bold" :class="getRankColor(participant.terraRP.weapon_rank)">{{ participant.terraRP.weapon_rank }}</span>
             </span>
             <span 
               v-if="participant.terraRP.armor_rank"
-              class="px-2 py-1 text-xs bg-blue-600/20 text-blue-300 rounded border border-blue-600/30"
+              class="flex justify-between px-2 py-1 text-xs bg-blue-600/20 text-blue-300 rounded border border-blue-600/30"
             >
-              <span class="font-bold text-yellow-400">{{ participant.terraRP.armor_rank }}</span> {{ participant.terraRP.armor_type || 'Armor' }}
+              <span>{{ participant.terraRP.armor_type || 'Armor' }}</span> <span class="font-bold" :class="getRankColor(participant.terraRP.armor_rank)">{{ participant.terraRP.armor_rank }}</span>
             </span>
           </div>
 
           <!-- Masteries -->
           <div v-if="participant.terraRP.masteries?.length > 0" class="space-y-1">
             <p class="text-xs text-slate-400 font-medium">Masteries:</p>
-            <div class="flex flex-wrap gap-1">
+            <div class="grid grid-cols-2 justify-between gap-1">
               <span 
-                v-for="mastery in participant.terraRP.masteries.slice(0, 3)" 
+                v-for="mastery in participant.terraRP.masteries"
                 :key="mastery.Mastery"
-                class="px-2 py-0.5 text-xs bg-purple-600/20 text-purple-300 rounded border border-purple-600/30"
+                class="flex justify-between px-2 py-0.5 text-xs bg-purple-600/20 text-purple-300 rounded border border-purple-600/30"
                 :title="`${mastery.Mastery}: ${mastery.Rank}`"
               >
-                <span class="font-bold text-yellow-400">{{ mastery.Rank }} </span> {{ mastery.Mastery }}
-              </span>
-              <span 
-                v-if="participant.terraRP.masteries.length > 3"
-                class="px-2 py-0.5 text-xs bg-slate-600/50 text-slate-400 rounded"
-                :title="getAdditionalMasteriesText(participant.terraRP.masteries.slice(3))"
-              >
-                +{{ participant.terraRP.masteries.length - 3 }} more
+                <span>{{ mastery.Mastery }}</span> <span class="font-bold" :class="getRankColor(mastery.Rank)">{{ mastery.Rank }}</span>
               </span>
             </div>
           </div>
@@ -147,7 +145,12 @@ import { RoomParticipant } from '../types'
 interface RoomParticipantsProps {
   participants: RoomParticipant[]
   currentUserName: string
+  selectedParticipantFilter?: string | null
 }
+
+const emit = defineEmits<{
+  participantSelect: [participantName: string | null]
+}>()
 
 const props = defineProps<RoomParticipantsProps>()
 
@@ -158,12 +161,32 @@ const isCurrentUser = (name: string) => {
   return name === props.currentUserName
 }
 
+const handleParticipantClick = (participantName: string) => {
+  if (props.selectedParticipantFilter === participantName) {
+    emit('participantSelect', null)
+  } else {
+    emit('participantSelect', participantName)
+  }
+}
+
 const stripHtml = (html: string) => {
   return html.replace(/<[^>]*>/g, '')
 }
 
 const getAdditionalMasteriesText = (masteries: { Mastery: string; Rank: string }[]) => {
   return masteries.map(m => `${m.Mastery}: ${m.Rank}`).join('\n')
+}
+
+const getRankColor = (rank: string) => {
+  switch (rank.toUpperCase()) {
+    case 'S': return 'text-yellow-400' // Gold
+    case 'A': return 'text-orange-400' // Orange  
+    case 'B': return 'text-pink-400'   // Pink
+    case 'C': return 'text-green-400'  // Green
+    case 'D': return 'text-blue-400'   // Blue
+    case 'E': return 'text-gray-400'   // Grey
+    default: return 'text-yellow-400'  // Default to gold
+  }
 }
 
 const formatRelativeTime = (timestamp: Date) => {

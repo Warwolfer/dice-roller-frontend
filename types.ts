@@ -81,6 +81,11 @@ export interface Room {
   name: string;
   rolls: Roll[];
   participants: RoomParticipant[];
+  created_at: Date;
+  updated_at: Date;
+  creator_name?: string;
+  creator_terrarp_id?: number;
+  room_code?: string;
 }
 
 export enum Rank {

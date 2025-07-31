@@ -68,10 +68,12 @@
             :selectedAction="selectedAction"
             :weaponRank="weaponRank"
             :masteryRank="masteryRank"
+            :bonus="actionBonus"
             :disabled="isLoading"
             @actionChange="setSelectedAction"
             @weaponRankChange="setWeaponRank"
             @masteryRankChange="setMasteryRank"
+            @bonusChange="setActionBonus"
           />
           
           <div class="mt-3">
@@ -118,10 +120,27 @@
     <!-- Participants Section -->
     <RoomParticipants 
       :participants="room.participants" 
-      :current-user-name="userName" 
+      :current-user-name="userName"
+      :selectedParticipantFilter="selectedParticipantFilter"
+      @participantSelect="emit('participantSelect', $event)"
     />
 
-    <RollHistory :rolls="room.rolls" />
+    <!-- Filter indicator -->
+    <div v-if="selectedParticipantFilter" class="mb-4 p-3 bg-sky-500/10 border border-sky-500/30 rounded-md flex justify-between items-center">
+      <span class="text-sky-300">
+        Showing rolls from <span class="font-semibold">{{ selectedParticipantFilter }}</span>
+      </span>
+      <Button 
+        @click="emit('participantSelect', null)" 
+        variant="secondary" 
+        size="sm"
+        class="text-xs px-2 py-1"
+      >
+        Clear Filter
+      </Button>
+    </div>
+    
+    <RollHistory :rolls="filteredRolls" />
   </div>
 </template>
 
@@ -143,13 +162,15 @@ interface RoomViewProps {
   defaultWeaponRank?: Rank | null
   defaultMasteryRank?: Rank | null
   userAvatar?: string | null
+  selectedParticipantFilter?: string | null
 }
 
 const props = defineProps<RoomViewProps>()
 const emit = defineEmits<{
   roll: [roomId: string, diceType: Dice, userName: string, comment?: string, avatarUrl?: string]
-  actionRoll: [roomId: string, action: Action, userName: string, weaponRank: Rank, masteryRank: Rank, comment?: string, avatarUrl?: string]
+  actionRoll: [roomId: string, action: Action, userName: string, weaponRank: Rank, masteryRank: Rank, comment?: string, avatarUrl?: string, bonus?: number]
   leaveRoom: []
+  participantSelect: [participantName: string | null]
 }>()
 
 const { fetchActions } = useActions()
@@ -164,6 +185,7 @@ const selectedDice = ref<Dice>(DICE_OPTIONS[0].value)
 const selectedAction = ref<Action | null>(null)
 const weaponRank = ref<Rank>(props.defaultWeaponRank || Rank.E)
 const masteryRank = ref<Rank>(props.defaultMasteryRank || Rank.E)
+const actionBonus = ref<number>(0)
 
 // Common state
 const rollComment = ref('')
@@ -200,6 +222,17 @@ const setMasteryRank = (rank: Rank) => {
   masteryRank.value = rank
 }
 
+const setActionBonus = (bonus: number) => {
+  actionBonus.value = bonus
+}
+
+const filteredRolls = computed(() => {
+  if (!props.selectedParticipantFilter) {
+    return props.room.rolls
+  }
+  return props.room.rolls.filter(roll => roll.userName === props.selectedParticipantFilter)
+})
+
 const onLeaveRoom = () => {
   emit('leaveRoom')
 }
@@ -212,7 +245,7 @@ const handleRoll = async () => {
     if (rollType.value === 'dice') {
       emit('roll', props.room.id, selectedDice.value, props.userName, rollComment.value, props.userAvatar || undefined)
     } else if (selectedAction.value) {
-      emit('actionRoll', props.room.id, selectedAction.value, props.userName, weaponRank.value, masteryRank.value, rollComment.value, props.userAvatar || undefined)
+      emit('actionRoll', props.room.id, selectedAction.value, props.userName, weaponRank.value, masteryRank.value, rollComment.value, props.userAvatar || undefined, actionBonus.value)
     }
     rollComment.value = '' // Clear comment input after emitting roll
   } catch (error) {

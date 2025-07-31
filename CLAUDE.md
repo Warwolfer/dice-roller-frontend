@@ -10,13 +10,13 @@ This is a collaborative dice roller web application built with Vue 3 and TypeScr
 
 ```bash
 # Development server (runs on http://localhost:5173)
-npm run dev
+pnpm run dev
 
 # Production build
-npm run build
+pnpm run build
 
 # Preview production build
-npm run preview
+pnpm run preview
 
 # Type checking (no dedicated script - run manually)
 vue-tsc --noEmit

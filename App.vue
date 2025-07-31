@@ -4,7 +4,7 @@
       <h1 class="text-4xl font-bold text-sky-500 tracking-tight">
         Collaborative Dice Roller
       </h1>
-      <p class="text-slate-400">Roll with friends, backed by a robust backend!</p>
+      <p class="text-slate-400">Don't roll 4</p>
     </header>
 
     <div 
@@ -98,6 +98,8 @@
         :defaultWeaponRank="weaponRank"
         :defaultMasteryRank="null"
         :userAvatar="userAvatar"
+        :selectedParticipantFilter="selectedParticipantFilter"
+        @participantSelect="handleParticipantSelect"
       />
     </div>
     
@@ -142,6 +144,7 @@ const activeRoomState = reactive<{ data: Room | null; isLoading: boolean; error:
 
 const isSubmitting = ref(false)
 const appError = ref<string | null>(null)
+const selectedParticipantFilter = ref<string | null>(null)
 
 // Computed
 const currentActiveRoom = computed(() => activeRoomState.data)
@@ -262,10 +265,10 @@ const fetchRooms = async () => {
     const processedRooms = roomsData.map((room: any) => ({ 
       ...room, 
       rolls: room.rolls || [], 
-      participants: room.participants || [] 
+      participants: room.participants || [],
+      created_at: new Date(room.created_at),
+      updated_at: new Date(room.updated_at),
     }))
-    // Only sort if the data has changed
-    processedRooms.sort((a: Room, b: Room) => a.name.localeCompare(b.name))
     roomsState.data = processedRooms
     roomsState.isLoading = false
     roomsState.error = null
@@ -288,7 +291,10 @@ const fetchActiveRoomData = async (roomId: string) => {
     return
   }
 
-  activeRoomState.isLoading = true
+  // Only set isLoading if we don't already have data for this room
+  if (!activeRoomState.data || activeRoomState.data.id !== roomId) {
+    activeRoomState.isLoading = true
+  }
   activeRoomState.error = null
   
   try {
@@ -301,6 +307,8 @@ const fetchActiveRoomData = async (roomId: string) => {
     clearTimeout(timeoutId)
     const processedRoomData: Room = {
       ...roomData,
+      created_at: new Date(roomData.created_at),
+      updated_at: new Date(roomData.updated_at),
       rolls: roomData.rolls.map((roll: any) => ({
         ...roll,
         timestamp: new Date(roll.timestamp),
@@ -317,7 +325,10 @@ const fetchActiveRoomData = async (roomId: string) => {
     activeRoomState.error = null
   } catch (e) {
     const error = e as Error
-    activeRoomState.data = activeRoomState.data?.id === roomId ? activeRoomState.data : null
+    // Only clear data if the error is critical and we don't have valid data for this room
+    if (activeRoomState.data?.id !== roomId) {
+      activeRoomState.data = null
+    }
     activeRoomState.isLoading = false
     const errorMessage = error.name === 'AbortError' 
       ? 'Request timed out - please check your connection'
@@ -342,7 +353,7 @@ const handleChangeUser = () => {
   setTerraRPData(null)
 }
 
-const handleCreateRoom = async (name: string) => {
+const handleCreateRoom = async (name: string, roomCode?: string) => {
   if (!userName.value) return
   isSubmitting.value = true
   appError.value = null
@@ -351,22 +362,33 @@ const handleCreateRoom = async (name: string) => {
     const response = await fetch(`${API_BASE_URL}/rooms`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name }),
+      body: JSON.stringify({ 
+        name, 
+        roomCode,
+        creator_name: userName.value,
+        creator_terrarp_id: terraRPData.value?.user_id
+      }),
     })
     if (!response.ok) throw new Error(`Failed to create room: ${response.statusText}`)
+    const newRoomData = await response.json()
     const newRoom: Room = { 
-      ...await response.json(), 
-      participants: []
+      ...newRoomData,
+      created_at: new Date(newRoomData.created_at),
+      updated_at: new Date(newRoomData.updated_at),
+      participants: newRoomData.participants || [],
+      rolls: newRoomData.rolls || [],
     }
-    roomsState.data = [...roomsState.data, newRoom].sort((a, b) => a.name.localeCompare(b.name))
+    
+    roomsState.data = [...roomsState.data, newRoom]
     
     // Invalidate rooms cache since we created a new room
-    invalidateCachePattern(new RegExp(`${API_BASE_URL}/rooms$`))
-    
-    setActiveRoomId(newRoom.id)
+    invalidateCachePattern(new RegExp(`${API_BASE_URL}/rooms`))
     
     // Join as participant when creating a room (since creating implies participation)
     await joinRoomAsParticipant(newRoom.id, userName.value, terraRPData.value)
+    
+    // Now that we've joined, set the room as active to trigger a fetch
+    setActiveRoomId(newRoom.id)
   } catch (e) {
     const error = e as Error
     appError.value = `Failed to create room: ${error.message}`
@@ -382,6 +404,17 @@ const handleSelectRoom = (id: string) => {
 }
 
 const joinRoomAsParticipant = async (roomId: string, userName: string, terraRPData?: any) => {
+  // Check if the participant already exists in the current room's participants
+  const currentParticipants = activeRoomState.data?.participants || []
+  const participantExists = currentParticipants.some(p => 
+    p.name === userName || (terraRPData?.user_id && p.terraRP?.user_id === terraRPData.user_id)
+  )
+
+  if (participantExists) {
+    console.log(`Participant ${userName} (TerraRP ID: ${terraRPData?.user_id || 'N/A'}) already in room ${roomId}. Skipping join API call.`)
+    return
+  }
+
   try {
     const response = await fetch(`${API_BASE_URL}/rooms/${roomId}/join`, {
       method: 'POST',
@@ -398,7 +431,9 @@ const joinRoomAsParticipant = async (roomId: string, userName: string, terraRPDa
     console.log('Joined room as participant:', participant)
     
     // Invalidate room cache to get updated participant list
-    invalidateCachePattern(new RegExp(`${API_BASE_URL}/rooms/${roomId}$`))
+    invalidateCachePattern(new RegExp(`${API_BASE_URL}/rooms/${roomId}`))
+    // Immediately re-fetch room data to update participant list
+    await fetchActiveRoomData(roomId)
     
   } catch (error) {
     console.warn('Error joining room as participant:', error)
@@ -407,8 +442,16 @@ const joinRoomAsParticipant = async (roomId: string, userName: string, terraRPDa
 }
 
 const handleLeaveRoom = () => {
+  if (activeRoomId.value) {
+    invalidateCachePattern(new RegExp(`${API_BASE_URL}/rooms/${activeRoomId.value}`))
+  }
   appError.value = null
+  selectedParticipantFilter.value = null
   setActiveRoomId(null)
+}
+
+const handleParticipantSelect = (participantName: string | null) => {
+  selectedParticipantFilter.value = participantName
 }
 
 const handleAddRoll = async (roomId: string, diceType: Dice, rollerUserName: string, comment?: string, avatarUrl?: string): Promise<Roll | null> => {
@@ -459,7 +502,7 @@ const handleAddRoll = async (roomId: string, diceType: Dice, rollerUserName: str
       activeRoomState.error = null
       
       // Invalidate room cache since rolls were updated
-      invalidateCachePattern(new RegExp(`${API_BASE_URL}/rooms/${roomId}$`))
+      invalidateCachePattern(new RegExp(`${API_BASE_URL}/rooms/${roomId}`))
     }
     return newRoll
   } catch (e) {
@@ -473,7 +516,7 @@ const handleAddRoll = async (roomId: string, diceType: Dice, rollerUserName: str
   }
 }
 
-const handleAddActionRoll = async (roomId: string, action: Action, rollerUserName: string, weaponRank: Rank, masteryRank: Rank, comment?: string, avatarUrl?: string): Promise<ActionRoll | null> => {
+const handleAddActionRoll = async (roomId: string, action: Action, rollerUserName: string, weaponRank: Rank, masteryRank: Rank, comment?: string, avatarUrl?: string, bonus?: number): Promise<ActionRoll | null> => {
   if (!rollerUserName || !roomId) return null
   isSubmitting.value = true
   appError.value = null
@@ -493,7 +536,8 @@ const handleAddActionRoll = async (roomId: string, action: Action, rollerUserNam
         masteryRank,
         rollFormula: action.rollFormula,
         comment,
-        avatarUrl 
+        avatarUrl,
+        bonus: bonus || 0
       }),
     })
     if (!response.ok) throw new Error(`Failed to add action roll: ${response.statusText}`)
@@ -533,7 +577,7 @@ const handleAddActionRoll = async (roomId: string, action: Action, rollerUserNam
       activeRoomState.error = null
       
       // Invalidate room cache since rolls were updated
-      invalidateCachePattern(new RegExp(`${API_BASE_URL}/rooms/${roomId}$`))
+      invalidateCachePattern(new RegExp(`${API_BASE_URL}/rooms/${roomId}`))
     }
     return newActionRoll
   } catch (e) {

@@ -17,8 +17,12 @@ class ApiCache {
   private readonly DEFAULT_TTL = 5 * 60 * 1000 // 5 minutes
 
   private getCacheKey(url: string, options?: RequestInit): string {
-    const optionsStr = options ? JSON.stringify(options) : ''
-    return `${url}:${optionsStr}`
+    if (!options) {
+      return `${url}:{}`
+    }
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { signal, ...keyOptions } = options
+    return `${url}:${JSON.stringify(keyOptions)}`
   }
 
   private isExpired(entry: CacheEntry<any>): boolean {

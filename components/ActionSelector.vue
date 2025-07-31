@@ -93,6 +93,24 @@
       </div>
     </div>
 
+    <!-- Bonus Input -->
+    <div class="flex items-center space-x-2">
+      <label for="bonus" class="text-slate-300 font-medium min-w-0">
+        Bonus:
+      </label>
+      <input
+        id="bonus"
+        type="number"
+        :value="bonus"
+        @input="onBonusChange"
+        :disabled="disabled"
+        min="0"
+        step="1"
+        placeholder="0"
+        class="flex-1 p-2 bg-slate-700 border border-slate-600 rounded-md focus:ring-sky-500 focus:border-sky-500 text-slate-100 disabled:opacity-50 text-center"
+      />
+    </div>
+
     <!-- Action Details -->
     <div v-if="selectedAction" class="mt-4 p-3 bg-slate-700/50 rounded-md">
       <div class="text-sm space-y-2">
@@ -120,6 +138,7 @@ interface ActionSelectorProps {
   selectedAction: Action | null
   weaponRank: Rank
   masteryRank: Rank
+  bonus?: number
   disabled?: boolean
 }
 
@@ -128,6 +147,7 @@ const emit = defineEmits<{
   actionChange: [action: Action | null]
   weaponRankChange: [rank: Rank]
   masteryRankChange: [rank: Rank]
+  bonusChange: [bonus: number]
 }>()
 
 const { actions, categories, fetchActions, getRankOptions, isLoading, error } = useActions()
@@ -166,5 +186,11 @@ const onWeaponRankChange = (e: Event) => {
 const onMasteryRankChange = (e: Event) => {
   const target = e.target as HTMLSelectElement
   emit('masteryRankChange', target.value as Rank)
+}
+
+const onBonusChange = (e: Event) => {
+  const target = e.target as HTMLInputElement
+  const bonus = parseInt(target.value) || 0
+  emit('bonusChange', bonus)
 }
 </script>
