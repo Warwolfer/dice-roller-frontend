@@ -1,6 +1,7 @@
-import { ref, reactive, readonly } from 'vue'
+import { ref, reactive, readonly, onUnmounted } from 'vue'
 import { API_BASE_URL } from '../constants'
 import type { Action } from '../types'
+import { useApiCache } from './useApiCache'
 
 interface ActionsData {
   actions: Action[]
@@ -18,7 +19,12 @@ const actionsState = reactive({
   isLoaded: false
 })
 
+// Track active fetch requests for cleanup
+const activeRequests = new Set<AbortController>()
+
 export function useActions() {
+  const { cachedFetch } = useApiCache()
+  
   const fetchActions = async () => {
     // Don't fetch if already loaded
     if (actionsState.isLoaded && actionsState.actions.length > 0) {
@@ -28,14 +34,13 @@ export function useActions() {
     actionsState.isLoading = true
     actionsState.error = null
 
-    try {
-      const response = await fetch(`${API_BASE_URL}/actions`)
-      
-      if (!response.ok) {
-        throw new Error(`Failed to fetch actions: ${response.status} ${response.statusText}`)
-      }
+    const controller = new AbortController()
+    activeRequests.add(controller)
 
-      const data: ActionsData = await response.json()
+    try {
+      const data: ActionsData = await cachedFetch(`${API_BASE_URL}/actions`, {
+        signal: controller.signal
+      }, 300000) // 5 minute TTL for actions data
       
       actionsState.actions = data.actions
       actionsState.categories = data.categories
@@ -43,10 +48,15 @@ export function useActions() {
       actionsState.isLoaded = true
       
     } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        console.log('Actions fetch cancelled')
+        return
+      }
       console.error('Error fetching actions:', error)
       actionsState.error = error instanceof Error ? error.message : 'Failed to fetch actions'
     } finally {
       actionsState.isLoading = false
+      activeRequests.delete(controller)
     }
   }
 
@@ -71,6 +81,19 @@ export function useActions() {
     actionsState.error = null
   }
 
+  const cleanup = () => {
+    // Cancel all active requests
+    for (const controller of activeRequests) {
+      controller.abort()
+    }
+    activeRequests.clear()
+  }
+
+  // Cleanup on unmount if used in a component context
+  if (typeof onUnmounted === 'function') {
+    onUnmounted(cleanup)
+  }
+
   return {
     // State
     actions: actionsState.actions,
@@ -85,6 +108,7 @@ export function useActions() {
     getActionsByCategory,
     getActionByName,
     getRankOptions,
-    clearError
+    clearError,
+    cleanup
   }
 }

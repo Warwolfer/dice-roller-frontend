@@ -1,5 +1,5 @@
 <template>
-  <div class="container mx-auto p-4 max-w-2xl">
+  <div class="container mx-auto p-4 max-w-[950px]">
     <header class="my-8 text-center">
       <h1 class="text-4xl font-bold text-sky-500 tracking-tight">
         Collaborative Dice Roller
@@ -26,7 +26,13 @@
     
     <div v-else>
       <div class="mb-6 p-4 bg-slate-800 rounded-lg shadow-md flex justify-between items-center">
-        <div>
+        <div class="flex items-center space-x-3">
+          <div v-if="userAvatar" class="w-10 h-10 rounded-full overflow-hidden bg-slate-600 flex-shrink-0">
+            <img :src="userAvatar" :alt="`${userName} avatar`" class="w-full h-full object-cover" />
+          </div>
+          <div v-else class="w-10 h-10 rounded-full bg-slate-600 flex items-center justify-center flex-shrink-0">
+            <span class="text-slate-300 text-sm font-medium">{{ userName?.charAt(0).toUpperCase() }}</span>
+          </div>
           <p class="text-slate-300">Welcome, <span class="font-semibold text-sky-400">{{ userName }}</span>!</p>
         </div>
         <Button @click="handleChangeUser" variant="secondary" size="sm">
@@ -89,18 +95,22 @@
         @actionRoll="handleAddActionRoll"
         @leaveRoom="handleLeaveRoom"
         :isSubmittingRoll="isSubmitting"
+        :defaultWeaponRank="weaponRank"
+        :defaultMasteryRank="null"
+        :userAvatar="userAvatar"
       />
     </div>
     
     <footer class="mt-12 text-center text-sm text-slate-500">
-      <p>&copy; {{ new Date().getFullYear() }} Warwolfer.</p>
+      <p>&copy; {{ currentYear }} Warwolfer.</p>
     </footer>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, watch, onMounted } from 'vue'
+import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useLocalStorage } from './composables/useLocalStorage'
+import { useApiCache } from './composables/useApiCache'
 import { Room, Dice, Roll, Action, Rank, ActionRoll } from './types'
 import UserInput from './components/UserInput.vue'
 import RoomCreator from './components/RoomCreator.vue'
@@ -112,6 +122,10 @@ import { API_BASE_URL } from './constants'
 // Local storage state
 const [userName, setUserName] = useLocalStorage<string | null>('diceRollerUser', null)
 const [activeRoomId, setActiveRoomId] = useLocalStorage<string | null>('diceRollerActiveRoom', null)
+const [terraRPData, setTerraRPData] = useLocalStorage<any>('diceRollerTerraRPData', null)
+
+// API cache
+const { cachedFetch, invalidateCachePattern } = useApiCache()
 
 // Reactive state
 const roomsState = reactive<{ data: Room[]; isLoading: boolean; error: string | null }>({
@@ -131,6 +145,99 @@ const appError = ref<string | null>(null)
 
 // Computed
 const currentActiveRoom = computed(() => activeRoomState.data)
+const currentYear = computed(() => new Date().getFullYear())
+
+// Memoized computed properties for expensive calculations
+const terraRPEquipment = computed(() => terraRPData.value?.equipment || [])
+
+const userAvatar = computed(() => {
+  const avatarUrl = terraRPData.value?.avatar_urls?.s
+  if (avatarUrl) {
+    console.log('Using TerraRP avatar:', avatarUrl)
+    return avatarUrl
+  }
+  return null
+})
+
+const weaponRank = computed(() => {
+  const equipment = terraRPEquipment.value
+  if (equipment.length === 0) return null
+  
+  const weaponItem = equipment.find((item: any) => item.Weapon)
+  if (weaponItem?.Weapon) {
+    console.log('Extracted weapon rank:', weaponItem.Weapon)
+    return weaponItem.Weapon
+  }
+  return null
+})
+
+const armorRank = computed(() => {
+  const equipment = terraRPEquipment.value
+  if (equipment.length === 0) return null
+  
+  // Look for armor in different possible formats
+  const armorItem = equipment.find((item: any) => 
+    item['Heavy Armor'] || item['Medium Armor'] || item['Light Armor'] || item.Armor
+  )
+  if (armorItem) {
+    const rank = armorItem['Heavy Armor'] || armorItem['Medium Armor'] || armorItem['Light Armor'] || armorItem.Armor
+    console.log('Extracted armor rank:', rank)
+    return rank
+  }
+  return null
+})
+
+// Note: armorRank is kept for display purposes in participants, but not used for mastery rank defaults
+
+// Background TerraRP data refresh with rate limiting
+let lastRefreshTime = 0
+const REFRESH_COOLDOWN = 30000 // 30 seconds cooldown
+let refreshController: AbortController | null = null
+
+const refreshTerraRPData = async () => {
+  if (!terraRPData.value?.user_id) return
+  
+  const now = Date.now()
+  if (now - lastRefreshTime < REFRESH_COOLDOWN) {
+    console.log('TerraRP refresh skipped - cooldown active')
+    return
+  }
+  
+  // Cancel previous request if still pending
+  if (refreshController) {
+    refreshController.abort()
+  }
+  
+  refreshController = new AbortController()
+  
+  try {
+    console.log('Background refreshing TerraRP data for user ID:', terraRPData.value.user_id)
+    const freshData = await cachedFetch(`${API_BASE_URL}/terrarp-user/${terraRPData.value.user_id}`, {
+      signal: refreshController.signal
+    }, 60000) // 1 minute TTL for TerraRP data
+    console.log('Fresh TerraRP data received:', freshData)
+      
+    // Update the stored data if it's different
+    const currentDataString = JSON.stringify(terraRPData.value)
+    const freshDataString = JSON.stringify(freshData)
+    
+    if (currentDataString !== freshDataString) {
+      console.log('TerraRP data has changed, updating...')
+      setTerraRPData(freshData)
+    } else {
+      console.log('TerraRP data unchanged')
+    }
+    lastRefreshTime = now
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      console.log('TerraRP refresh cancelled')
+    } else {
+      console.log('Background TerraRP refresh failed:', error)
+    }
+  } finally {
+    refreshController = null
+  }
+}
 
 // Methods
 const fetchRooms = async () => {
@@ -148,21 +255,17 @@ const fetchRooms = async () => {
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 10000) // 10s timeout
     
-    const response = await fetch(`${API_BASE_URL}/rooms`, {
+    const roomsData = await cachedFetch(`${API_BASE_URL}/rooms`, {
       signal: controller.signal
-    })
+    }, 30000) // 30 second TTL for rooms list
     clearTimeout(timeoutId)
-    
-    if (!response.ok) {
-      const errorMessage = response.status === 404 
-        ? 'No rooms found or server unavailable'
-        : response.status >= 500 
-        ? 'Server error - please try again later'
-        : `Failed to fetch rooms: ${response.statusText}`
-      throw new Error(errorMessage)
-    }
-    const roomsData = await response.json()
-    const processedRooms = roomsData.map((room: any) => ({ ...room, rolls: room.rolls || [] })).sort((a: Room, b: Room) => a.name.localeCompare(b.name))
+    const processedRooms = roomsData.map((room: any) => ({ 
+      ...room, 
+      rolls: room.rolls || [], 
+      participants: room.participants || [] 
+    }))
+    // Only sort if the data has changed
+    processedRooms.sort((a: Room, b: Room) => a.name.localeCompare(b.name))
     roomsState.data = processedRooms
     roomsState.isLoading = false
     roomsState.error = null
@@ -192,22 +295,10 @@ const fetchActiveRoomData = async (roomId: string) => {
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 10000) // 10s timeout
     
-    const response = await fetch(`${API_BASE_URL}/rooms/${roomId}`, {
+    const roomData = await cachedFetch(`${API_BASE_URL}/rooms/${roomId}`, {
       signal: controller.signal
-    })
+    }, 15000) // 15 second TTL for room details
     clearTimeout(timeoutId)
-    
-    if (!response.ok) {
-      if (response.status === 404) {
-        setActiveRoomId(null)
-        throw new Error(`Room not found (ID: ${roomId}). It may have been deleted.`)
-      }
-      const errorMessage = response.status >= 500 
-        ? 'Server error - please try again later'
-        : `Failed to fetch room details: ${response.statusText}`
-      throw new Error(errorMessage)
-    }
-    const roomData = await response.json()
     const processedRoomData: Room = {
       ...roomData,
       rolls: roomData.rolls.map((roll: any) => ({
@@ -215,6 +306,11 @@ const fetchActiveRoomData = async (roomId: string) => {
         timestamp: new Date(roll.timestamp),
         comment: roll.comment || undefined,
       })).sort((a: Roll, b: Roll) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()),
+      participants: (roomData.participants || []).map((participant: any) => ({
+        ...participant,
+        joinedAt: new Date(participant.joinedAt),
+        lastActivity: new Date(participant.lastActivity),
+      })),
     }
     activeRoomState.data = processedRoomData
     activeRoomState.isLoading = false
@@ -231,17 +327,19 @@ const fetchActiveRoomData = async (roomId: string) => {
   }
 }
 
-const handleSetUserName = (name: string) => {
+const handleSetUserName = (name: string, terrapData?: any) => {
   appError.value = null
   roomsState.error = null
   activeRoomState.error = null
   setUserName(name)
+  setTerraRPData(terrapData || null)
 }
 
 const handleChangeUser = () => {
   appError.value = null
   setUserName(null)
   setActiveRoomId(null)
+  setTerraRPData(null)
 }
 
 const handleCreateRoom = async (name: string) => {
@@ -256,9 +354,19 @@ const handleCreateRoom = async (name: string) => {
       body: JSON.stringify({ name }),
     })
     if (!response.ok) throw new Error(`Failed to create room: ${response.statusText}`)
-    const newRoom: Room = await response.json()
+    const newRoom: Room = { 
+      ...await response.json(), 
+      participants: []
+    }
     roomsState.data = [...roomsState.data, newRoom].sort((a, b) => a.name.localeCompare(b.name))
+    
+    // Invalidate rooms cache since we created a new room
+    invalidateCachePattern(new RegExp(`${API_BASE_URL}/rooms$`))
+    
     setActiveRoomId(newRoom.id)
+    
+    // Join as participant when creating a room (since creating implies participation)
+    await joinRoomAsParticipant(newRoom.id, userName.value, terraRPData.value)
   } catch (e) {
     const error = e as Error
     appError.value = `Failed to create room: ${error.message}`
@@ -273,22 +381,50 @@ const handleSelectRoom = (id: string) => {
   setActiveRoomId(id)
 }
 
+const joinRoomAsParticipant = async (roomId: string, userName: string, terraRPData?: any) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/rooms/${roomId}/join`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userName, terraRPData }),
+    })
+    
+    if (!response.ok) {
+      console.warn(`Failed to join room as participant: ${response.statusText}`)
+      return
+    }
+    
+    const participant = await response.json()
+    console.log('Joined room as participant:', participant)
+    
+    // Invalidate room cache to get updated participant list
+    invalidateCachePattern(new RegExp(`${API_BASE_URL}/rooms/${roomId}$`))
+    
+  } catch (error) {
+    console.warn('Error joining room as participant:', error)
+    // Don't show error to user as this is not critical
+  }
+}
+
 const handleLeaveRoom = () => {
   appError.value = null
   setActiveRoomId(null)
 }
 
-const handleAddRoll = async (roomId: string, diceType: Dice, rollerUserName: string, comment?: string): Promise<Roll | null> => {
+const handleAddRoll = async (roomId: string, diceType: Dice, rollerUserName: string, comment?: string, avatarUrl?: string): Promise<Roll | null> => {
   if (!rollerUserName || !roomId) return null
   isSubmitting.value = true
   appError.value = null
   activeRoomState.error = null
   
+  // Join as participant on first roll
+  await joinRoomAsParticipant(roomId, rollerUserName, terraRPData.value)
+  
   try {
     const response = await fetch(`${API_BASE_URL}/rooms/${roomId}/rolls`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userName: rollerUserName, diceType, comment }),
+      body: JSON.stringify({ userName: rollerUserName, diceType, comment, avatarUrl }),
     })
     if (!response.ok) throw new Error(`Failed to add roll: ${response.statusText}`)
     const newRollData = await response.json()
@@ -321,6 +457,9 @@ const handleAddRoll = async (roomId: string, diceType: Dice, rollerUserName: str
         rolls: updatedRolls,
       }
       activeRoomState.error = null
+      
+      // Invalidate room cache since rolls were updated
+      invalidateCachePattern(new RegExp(`${API_BASE_URL}/rooms/${roomId}$`))
     }
     return newRoll
   } catch (e) {
@@ -334,11 +473,14 @@ const handleAddRoll = async (roomId: string, diceType: Dice, rollerUserName: str
   }
 }
 
-const handleAddActionRoll = async (roomId: string, action: Action, rollerUserName: string, weaponRank: Rank, masteryRank: Rank, comment?: string): Promise<ActionRoll | null> => {
+const handleAddActionRoll = async (roomId: string, action: Action, rollerUserName: string, weaponRank: Rank, masteryRank: Rank, comment?: string, avatarUrl?: string): Promise<ActionRoll | null> => {
   if (!rollerUserName || !roomId) return null
   isSubmitting.value = true
   appError.value = null
   activeRoomState.error = null
+  
+  // Join as participant on first roll
+  await joinRoomAsParticipant(roomId, rollerUserName, terraRPData.value)
   
   try {
     const response = await fetch(`${API_BASE_URL}/rooms/${roomId}/rolls`, {
@@ -350,7 +492,8 @@ const handleAddActionRoll = async (roomId: string, action: Action, rollerUserNam
         weaponRank,
         masteryRank,
         rollFormula: action.rollFormula,
-        comment 
+        comment,
+        avatarUrl 
       }),
     })
     if (!response.ok) throw new Error(`Failed to add action roll: ${response.statusText}`)
@@ -388,6 +531,9 @@ const handleAddActionRoll = async (roomId: string, action: Action, rollerUserNam
         rolls: updatedRolls,
       }
       activeRoomState.error = null
+      
+      // Invalidate room cache since rolls were updated
+      invalidateCachePattern(new RegExp(`${API_BASE_URL}/rooms/${roomId}$`))
     }
     return newActionRoll
   } catch (e) {
@@ -448,6 +594,22 @@ onMounted(() => {
   }
   if (activeRoomId.value && userName.value) {
     fetchActiveRoomData(activeRoomId.value)
+  }
+  
+  // Background refresh TerraRP data if user has it stored
+  if (terraRPData.value?.user_id) {
+    // Delay refresh to not interfere with initial room loading
+    setTimeout(() => {
+      refreshTerraRPData()
+    }, 1000)
+  }
+})
+
+// Cleanup on unmount
+onUnmounted(() => {
+  // Cancel any pending TerraRP refresh
+  if (refreshController) {
+    refreshController.abort()
   }
 })
 </script>

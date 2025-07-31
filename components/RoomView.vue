@@ -7,9 +7,28 @@
       </Button>
     </div>
     
-    <div class="mb-6 p-4 bg-slate-700/50 rounded-md">
-      <!-- Roll Type Toggle -->
-      <div class="mb-4 flex items-center space-x-4">
+    <div class="mb-6 bg-slate-700/50 rounded-md">
+      <!-- Collapsible Header -->
+      <div 
+        class="p-4 flex items-center justify-between cursor-pointer hover:bg-slate-700/70 transition-colors rounded-md"
+        @click="isRollSectionExpanded = !isRollSectionExpanded"
+      >
+        <h3 class="text-lg font-semibold text-sky-400">Roll</h3>
+        <svg 
+          class="w-5 h-5 text-slate-300 transition-transform duration-200"
+          :class="{ 'rotate-180': isRollSectionExpanded }"
+          fill="none" 
+          stroke="currentColor" 
+          viewBox="0 0 24 24"
+        >
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+        </svg>
+      </div>
+      
+      <!-- Collapsible Content -->
+      <div v-show="isRollSectionExpanded" class="px-4 pb-4">
+        <!-- Roll Type Toggle -->
+        <div class="mb-4 flex items-center space-x-4">
         <span class="text-slate-300 font-medium">Roll Type:</span>
         <label class="flex items-center space-x-2 cursor-pointer">
           <input
@@ -81,19 +100,26 @@
           {{ buttonText }}
         </Button>
       </div>
-      <div 
-        v-if="isAnimatingRoll || animatedRollResult !== null" 
-        class="mt-4 text-center p-3 bg-slate-600 rounded-md"
-      >
-        <span v-if="isAnimatingRoll" class="text-slate-300 animate-pulse">
-          Rolling...
-        </span>
-        <span v-else-if="animatedRollResult !== null">
-          <span class="text-slate-300">You rolled: </span>
-          <span class="text-3xl font-bold text-amber-400">{{ animatedRollResult }}</span>
-        </span>
+        <div 
+          v-if="isAnimatingRoll || animatedRollResult !== null" 
+          class="mt-4 text-center p-3 bg-slate-600 rounded-md"
+        >
+          <span v-if="isAnimatingRoll" class="text-slate-300 animate-pulse">
+            Rolling...
+          </span>
+          <span v-else-if="animatedRollResult !== null">
+            <span class="text-slate-300">You rolled: </span>
+            <span class="text-3xl font-bold text-amber-400">{{ animatedRollResult }}</span>
+          </span>
+        </div>
       </div>
     </div>
+
+    <!-- Participants Section -->
+    <RoomParticipants 
+      :participants="room.participants" 
+      :current-user-name="userName" 
+    />
 
     <RollHistory :rolls="room.rolls" />
   </div>
@@ -105,6 +131,7 @@ import { Room, Dice, Roll, Action, Rank } from '../types'
 import DiceSelector from './DiceSelector.vue'
 import ActionSelector from './ActionSelector.vue'
 import RollHistory from './RollHistory.vue'
+import RoomParticipants from './RoomParticipants.vue'
 import Button from './Button.vue'
 import { DICE_OPTIONS, RANK_OPTIONS } from '../constants'
 import { useActions } from '../composables/useActions'
@@ -113,12 +140,15 @@ interface RoomViewProps {
   room: Room
   userName: string
   isSubmittingRoll: boolean
+  defaultWeaponRank?: Rank | null
+  defaultMasteryRank?: Rank | null
+  userAvatar?: string | null
 }
 
 const props = defineProps<RoomViewProps>()
 const emit = defineEmits<{
-  roll: [roomId: string, diceType: Dice, userName: string, comment?: string]
-  actionRoll: [roomId: string, action: Action, userName: string, weaponRank: Rank, masteryRank: Rank, comment?: string]
+  roll: [roomId: string, diceType: Dice, userName: string, comment?: string, avatarUrl?: string]
+  actionRoll: [roomId: string, action: Action, userName: string, weaponRank: Rank, masteryRank: Rank, comment?: string, avatarUrl?: string]
   leaveRoom: []
 }>()
 
@@ -132,13 +162,14 @@ const selectedDice = ref<Dice>(DICE_OPTIONS[0].value)
 
 // Action roll state
 const selectedAction = ref<Action | null>(null)
-const weaponRank = ref<Rank>(Rank.E)
-const masteryRank = ref<Rank>(Rank.E)
+const weaponRank = ref<Rank>(props.defaultWeaponRank || Rank.E)
+const masteryRank = ref<Rank>(props.defaultMasteryRank || Rank.E)
 
 // Common state
 const rollComment = ref('')
 const isAnimatingRoll = ref(false)
 const animatedRollResult = ref<number | null>(null)
+const isRollSectionExpanded = ref(false) // Start collapsed
 
 const isLoading = computed(() => props.isSubmittingRoll || isAnimatingRoll.value)
 
@@ -179,9 +210,9 @@ const handleRoll = async () => {
 
   try {
     if (rollType.value === 'dice') {
-      emit('roll', props.room.id, selectedDice.value, props.userName, rollComment.value)
+      emit('roll', props.room.id, selectedDice.value, props.userName, rollComment.value, props.userAvatar || undefined)
     } else if (selectedAction.value) {
-      emit('actionRoll', props.room.id, selectedAction.value, props.userName, weaponRank.value, masteryRank.value, rollComment.value)
+      emit('actionRoll', props.room.id, selectedAction.value, props.userName, weaponRank.value, masteryRank.value, rollComment.value, props.userAvatar || undefined)
     }
     rollComment.value = '' // Clear comment input after emitting roll
   } catch (error) {
@@ -195,21 +226,31 @@ onMounted(() => {
   fetchActions()
 })
 
+// Watch for changes in default ranks (e.g., from TerraRP data updates)
+watch([() => props.defaultWeaponRank, () => props.defaultMasteryRank], ([newWeaponRank, newMasteryRank]) => {
+  // Only update weapon rank if we have a valid TerraRP weapon rank
+  if (newWeaponRank && newWeaponRank !== weaponRank.value) {
+    weaponRank.value = newWeaponRank
+  }
+  // Don't automatically set mastery rank - let user choose manually
+  // Mastery rank is not tied to equipment/armor
+})
+
 // Watch for changes in room id, selected dice, or roll type to reset animation
 watch([() => props.room.id, selectedDice, rollType], () => {
   animatedRollResult.value = null
   isAnimatingRoll.value = false
 })
 
-// Watch for new rolls from the current user to show the result
-watch(() => props.room.rolls, (newRolls, oldRolls) => {
-  if (newRolls.length > (oldRolls?.length || 0)) {
-    const latestRoll = newRolls[0] // Rolls are sorted by timestamp desc
+// Watch for new rolls from the current user to show the result (shallow watch for better performance)
+watch(() => [props.room.rolls.length, props.room.rolls[0]?.id], ([newLength, newLatestId], [oldLength, oldLatestId]) => {
+  if (newLength > (oldLength || 0) && newLatestId !== oldLatestId) {
+    const latestRoll = props.room.rolls[0] // Rolls are sorted by timestamp desc
     if (latestRoll.userName === props.userName) {
       // Show the actual roll result and stop rolling animation
       animatedRollResult.value = latestRoll.result
       isAnimatingRoll.value = false
     }
   }
-}, { deep: true })
+})
 </script>
