@@ -167,12 +167,26 @@ const userAvatar = computed(() => {
 })
 
 const weaponRank = computed(() => {
+  // First priority: Check if current user exists in active room participants
+  if (activeRoomState.data && userName.value) {
+    const currentParticipant = activeRoomState.data.participants.find(p => 
+      p.name === userName.value || 
+      (terraRPData.value?.user_id && p.terraRP?.user_id === terraRPData.value.user_id)
+    )
+    
+    if (currentParticipant?.terraRP?.weapon_rank) {
+      console.log('Using saved participant weapon rank:', currentParticipant.terraRP.weapon_rank)
+      return currentParticipant.terraRP.weapon_rank
+    }
+  }
+  
+  // Second priority: Use TerraRP data if no participant data exists
   const equipment = terraRPEquipment.value
   if (equipment.length === 0) return null
   
   const weaponItem = equipment.find((item: any) => item.Weapon)
   if (weaponItem?.Weapon) {
-    console.log('Extracted weapon rank:', weaponItem.Weapon)
+    console.log('Using TerraRP weapon rank:', weaponItem.Weapon)
     return weaponItem.Weapon
   }
   return null
