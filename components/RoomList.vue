@@ -2,8 +2,8 @@
   <div v-if="sortedRooms.length === 0" class="text-slate-400 text-center py-4">
     No rooms created yet. Create one above!
   </div>
-  <div v-else class="mb-6 p-4 bg-slate-800 rounded-lg shadow-md">
-    <h2 class="text-xl font-semibold text-sky-400 mb-3">Available Rooms</h2>
+  <div v-else class="mb-6 p-4 bg-transparentbg rounded-lg shadow-md">
+    <h2 class="text-xl font-semibold text-white mb-3">Available Rooms</h2>
     <ul class="space-y-2">
       <li v-for="room in sortedRooms" :key="room.id">
         <Button

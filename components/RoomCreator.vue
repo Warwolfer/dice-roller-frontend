@@ -1,5 +1,5 @@
 <template>
-  <form @submit="handleSubmit" class="mb-6 p-4 bg-slate-800 rounded-lg shadow-md">
+  <form @submit="handleSubmit" class="mb-6 p-4 bg-transparentbg rounded-lg shadow-md">
     <div class="grid grid-cols-3 md:grid-cols-2 gap-4">
       <div class="col-span-2">
         <label for="roomName" class="block text-sm font-medium text-slate-300 mb-1">

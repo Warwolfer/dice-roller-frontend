@@ -1,7 +1,7 @@
 <template>
   <div class="container mx-auto p-4 max-w-[950px]">
     <header class="my-8 text-center">
-      <h1 class="text-4xl font-bold text-sky-500 tracking-tight">
+      <h1 class="text-4xl font-bold text-white tracking-tight">
         Collaborative Dice Roller
       </h1>
       <p class="text-slate-400">Don't roll 4</p>
@@ -25,15 +25,15 @@
     />
     
     <div v-else>
-      <div class="mb-6 p-4 bg-slate-800 rounded-lg shadow-md flex justify-between items-center">
+      <div class="mb-6 p-4 bg-transparentbg rounded-lg shadow-md flex justify-between items-center">
         <div class="flex items-center space-x-3">
-          <div v-if="userAvatar" class="w-10 h-10 rounded-full overflow-hidden bg-slate-600 flex-shrink-0">
+          <div v-if="userAvatar" class="w-10 h-10 rounded-full overflow-hidden flex-shrink-0">
             <img :src="userAvatar" :alt="`${userName} avatar`" class="w-full h-full object-cover" />
           </div>
           <div v-else class="w-10 h-10 rounded-full bg-slate-600 flex items-center justify-center flex-shrink-0">
             <span class="text-slate-300 text-sm font-medium">{{ userName?.charAt(0).toUpperCase() }}</span>
           </div>
-          <p class="text-slate-300">Welcome, <span class="font-semibold text-sky-400">{{ userName }}</span>!</p>
+          <p class="text-slate-300">Welcome, <span class="font-semibold text-white">{{ userName }}</span>!</p>
         </div>
         <Button @click="handleChangeUser" variant="secondary" size="sm">
           Change User
@@ -43,7 +43,7 @@
       <div v-if="!currentActiveRoom && !activeRoomState.isLoading">
         <RoomCreator @createRoom="handleCreateRoom" />
         
-        <p v-if="roomsState.isLoading" class="text-center text-sky-400 py-4">Loading rooms...</p>
+        <p v-if="roomsState.isLoading" class="text-center text-white py-4">Loading rooms...</p>
         
         <div 
           v-if="!roomsState.isLoading && roomsState.error"
@@ -69,7 +69,7 @@
         />
       </div>
 
-      <p v-if="activeRoomState.isLoading" class="text-center text-sky-400 py-4">Loading room details...</p>
+      <p v-if="activeRoomState.isLoading" class="text-center text-white py-4">Loading room details...</p>
       
       <div 
         v-if="!activeRoomState.isLoading && activeRoomState.error && !currentActiveRoom"
@@ -113,6 +113,7 @@
 import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useLocalStorage } from './composables/useLocalStorage'
 import { useApiCache } from './composables/useApiCache'
+import { useWebSocket } from './composables/useWebSocket'
 import { Room, Dice, Roll, Action, Rank, ActionRoll } from './types'
 import UserInput from './components/UserInput.vue'
 import RoomCreator from './components/RoomCreator.vue'
@@ -128,6 +129,9 @@ const [terraRPData, setTerraRPData] = useLocalStorage<any>('diceRollerTerraRPDat
 
 // API cache
 const { cachedFetch, invalidateCachePattern } = useApiCache()
+
+// WebSocket connection
+const { state: wsState, connect: wsConnect, disconnect: wsDisconnect, joinRoom: wsJoinRoom, leaveRoom: wsLeaveRoom, on: wsOn } = useWebSocket()
 
 // Reactive state
 const roomsState = reactive<{ data: Room[]; isLoading: boolean; error: string | null }>({
@@ -365,8 +369,8 @@ const handleCreateRoom = async (name: string, roomCode?: string) => {
       body: JSON.stringify({ 
         name, 
         roomCode,
-        creator_name: userName.value,
-        creator_terrarp_id: terraRPData.value?.user_id
+        creatorName: userName.value,
+        creatorTerraRpId: terraRPData.value?.user_id
       }),
     })
     if (!response.ok) throw new Error(`Failed to create room: ${response.statusText}`)
@@ -375,11 +379,19 @@ const handleCreateRoom = async (name: string, roomCode?: string) => {
       ...newRoomData,
       created_at: new Date(newRoomData.created_at),
       updated_at: new Date(newRoomData.updated_at),
-      participants: newRoomData.participants || [],
-      rolls: newRoomData.rolls || [],
+      participants: (newRoomData.participants || []).map((participant: any) => ({
+        ...participant,
+        joinedAt: new Date(participant.joinedAt),
+        lastActivity: new Date(participant.lastActivity),
+      })),
+      rolls: (newRoomData.rolls || []).map((roll: any) => ({
+        ...roll,
+        timestamp: new Date(roll.timestamp),
+        comment: roll.comment || undefined,
+      })),
     }
     
-    roomsState.data = [...roomsState.data, newRoom]
+    roomsState.data = [newRoom, ...roomsState.data]
     
     // Invalidate rooms cache since we created a new room
     invalidateCachePattern(new RegExp(`${API_BASE_URL}/rooms`))
@@ -398,9 +410,19 @@ const handleCreateRoom = async (name: string, roomCode?: string) => {
 }
 
 const handleSelectRoom = (id: string) => {
+  // Leave current WebSocket room if connected to one
+  if (wsState.currentRoomId) {
+    wsLeaveRoom()
+  }
+  
   activeRoomState.error = null
   activeRoomState.data = null
   setActiveRoomId(id)
+  
+  // Join new WebSocket room
+  if (wsState.isConnected) {
+    wsJoinRoom(id, { userName: userName.value })
+  }
 }
 
 const joinRoomAsParticipant = async (roomId: string, userName: string, terraRPData?: any) => {
@@ -444,6 +466,11 @@ const joinRoomAsParticipant = async (roomId: string, userName: string, terraRPDa
 const handleLeaveRoom = () => {
   if (activeRoomId.value) {
     invalidateCachePattern(new RegExp(`${API_BASE_URL}/rooms/${activeRoomId.value}`))
+    
+    // Leave WebSocket room
+    if (wsState.isConnected) {
+      wsLeaveRoom(activeRoomId.value)
+    }
   }
   appError.value = null
   selectedParticipantFilter.value = null
@@ -617,12 +644,22 @@ watch(userName, (newUserName) => {
   }
 })
 
-watch(activeRoomId, (newRoomId) => {
+watch(activeRoomId, (newRoomId, oldRoomId) => {
+  // Leave old WebSocket room
+  if (oldRoomId && wsState.isConnected) {
+    wsLeaveRoom(oldRoomId)
+  }
+  
   if (newRoomId && userName.value) {
     const needsInitialLoadForRoom = (!activeRoomState.data || activeRoomState.data.id !== newRoomId) && 
                                     !activeRoomState.isLoading && !activeRoomState.error
     if (needsInitialLoadForRoom) {
       fetchActiveRoomData(newRoomId)
+    }
+    
+    // Join new WebSocket room
+    if (wsState.isConnected) {
+      wsJoinRoom(newRoomId, { userName: userName.value })
     }
   } else {
     activeRoomState.data = null
@@ -631,8 +668,101 @@ watch(activeRoomId, (newRoomId) => {
   }
 })
 
+// Watch for WebSocket connection and join room if needed
+watch(() => wsState.isConnected, (isConnected) => {
+  if (isConnected && activeRoomId.value && userName.value) {
+    wsJoinRoom(activeRoomId.value, { userName: userName.value })
+  }
+})
+
+// WebSocket event handlers
+const setupWebSocketHandlers = () => {
+  // Handle new rolls
+  wsOn('new_roll', (message) => {
+    if (message.roomId === activeRoomId.value && activeRoomState.data) {
+      const newRoll = message.payload
+      
+      // Convert timestamp to Date object
+      if (newRoll.timestamp) {
+        newRoll.timestamp = new Date(newRoll.timestamp)
+      }
+      
+      // Insert new roll at the correct position to maintain sort order
+      const existingRolls = activeRoomState.data.rolls
+      const newRollTime = newRoll.timestamp.getTime()
+      let insertIndex = 0
+      
+      // Find correct insertion point (rolls are sorted desc by timestamp)
+      while (insertIndex < existingRolls.length && 
+             existingRolls[insertIndex].timestamp.getTime() > newRollTime) {
+        insertIndex++
+      }
+      
+      const updatedRolls = [
+        ...existingRolls.slice(0, insertIndex),
+        newRoll,
+        ...existingRolls.slice(insertIndex)
+      ]
+      
+      activeRoomState.data = {
+        ...activeRoomState.data,
+        rolls: updatedRolls,
+        updated_at: new Date()
+      }
+      
+      console.log('New roll received via WebSocket:', newRoll)
+    }
+  })
+  
+  // Handle new participants
+  wsOn('participant_joined', (message) => {
+    if (message.roomId === activeRoomId.value && activeRoomState.data) {
+      const newParticipant = message.payload
+      
+      // Convert dates to Date objects
+      if (newParticipant.joinedAt) {
+        newParticipant.joinedAt = new Date(newParticipant.joinedAt)
+      }
+      if (newParticipant.lastActivity) {
+        newParticipant.lastActivity = new Date(newParticipant.lastActivity)
+      }
+      
+      // Check if participant already exists (shouldn't happen, but safety check)
+      const existingParticipant = activeRoomState.data.participants.find(
+        p => p.id === newParticipant.id || p.name === newParticipant.name
+      )
+      
+      if (!existingParticipant) {
+        activeRoomState.data = {
+          ...activeRoomState.data,
+          participants: [...activeRoomState.data.participants, newParticipant],
+          updated_at: new Date()
+        }
+        
+        console.log('New participant joined via WebSocket:', newParticipant)
+      }
+    }
+  })
+  
+  // Handle WebSocket connection status
+  wsOn('joined_room', (message) => {
+    console.log('Successfully joined room via WebSocket:', message.roomId)
+  })
+  
+  wsOn('error', (message) => {
+    console.error('WebSocket error:', message)
+    appError.value = `WebSocket error: ${message.payload?.message || 'Unknown error'}`
+  })
+}
+
 // Initial load
 onMounted(() => {
+  // Initialize WebSocket connection
+  wsConnect()
+  
+  // Set up WebSocket event handlers
+  setupWebSocketHandlers()
+  
   if (userName.value) {
     fetchRooms()
   }
@@ -655,5 +785,8 @@ onUnmounted(() => {
   if (refreshController) {
     refreshController.abort()
   }
+  
+  // Disconnect WebSocket
+  wsDisconnect()
 })
 </script>

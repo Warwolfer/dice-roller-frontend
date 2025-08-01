@@ -7,7 +7,7 @@
             type="radio"
             value="manual"
             v-model="inputMode"
-            class="mr-2 text-sky-500 focus:ring-sky-500"
+            class="mr-2 text-white focus:ring-sky-500"
           />
           <span class="text-sm text-slate-300">Enter Name Manually</span>
         </label>
@@ -16,7 +16,7 @@
             type="radio"
             value="userid"
             v-model="inputMode"
-            class="mr-2 text-sky-500 focus:ring-sky-500"
+            class="mr-2 text-white focus:ring-sky-500"
           />
           <span class="text-sm text-slate-300">Use TerraRP User ID</span>
         </label>

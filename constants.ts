@@ -26,10 +26,10 @@ export interface RankOption {
 export const RANK_OPTIONS: RankOption[] = [
   { label: 'E', value: Rank.E, bonus: 0 },
   { label: 'D', value: Rank.D, bonus: 10 },
-  { label: 'C', value: Rank.C, bonus: 20 },
-  { label: 'B', value: Rank.B, bonus: 30 },
-  { label: 'A', value: Rank.A, bonus: 40 },
-  { label: 'S', value: Rank.S, bonus: 50 },
+  { label: 'C', value: Rank.C, bonus: 15 },
+  { label: 'B', value: Rank.B, bonus: 25 },
+  { label: 'A', value: Rank.A, bonus: 30 },
+  { label: 'S', value: Rank.S, bonus: 40 },
 ];
 
 // Read API_BASE_URL from Vite environment variable with a fallback

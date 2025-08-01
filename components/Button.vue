@@ -30,13 +30,13 @@ const baseStyles = 'font-semibold rounded-lg focus:outline-none focus:ring-2 foc
 const variantStyles = computed(() => {
   switch (props.variant) {
     case 'primary':
-      return 'bg-sky-600 hover:bg-sky-700 text-white focus:ring-sky-500'
+      return 'bg-[#a7357b] hover:bg-sky-700 text-white focus:ring-sky-500'
     case 'secondary':
       return 'bg-slate-600 hover:bg-slate-700 text-slate-100 focus:ring-slate-500'
     case 'danger':
       return 'bg-red-600 hover:bg-red-700 text-white focus:ring-red-500'
     default:
-      return 'bg-sky-600 hover:bg-sky-700 text-white focus:ring-sky-500'
+      return 'bg-[#a7357b] hover:bg-sky-700 text-white focus:ring-sky-500'
   }
 })
 
@@ -47,7 +47,7 @@ const sizeStyles = computed(() => {
     case 'md':
       return 'px-4 py-2 text-sm'
     case 'lg':
-      return 'px-6 py-3 text-base'
+      return 'px-6 py-2 text-base'
     default:
       return 'px-4 py-2 text-sm'
   }

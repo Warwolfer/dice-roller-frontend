@@ -3,7 +3,7 @@
     No rolls in this room yet. Be the first!
   </div>
   <div v-else class="mt-6">
-    <h3 class="text-lg font-semibold text-sky-400 mb-2">Roll History ({{ rolls.length }} rolls)</h3>
+    <h3 class="text-lg font-semibold text-white mb-2">Roll History ({{ rolls.length }} rolls)</h3>
     <div 
       class="space-y-3 max-h-[50rem] overflow-y-auto p-3 bg-slate-700/50 rounded-md thin-scrollbar" 
       aria-live="polite"
@@ -12,7 +12,7 @@
       <div
         v-for="roll in displayedRolls" 
         :key="roll.id" 
-        class="p-3 bg-slate-800 rounded-md shadow text-sm"
+        class="p-3 bg-transparentbg rounded-md shadow text-sm"
       >
         <div class="flex justify-between items-center">
           <div class="flex items-center space-x-2">
@@ -22,7 +22,7 @@
             <div v-else class="w-6 h-6 rounded-full bg-slate-600 flex items-center justify-center flex-shrink-0">
               <span class="text-slate-300 text-xs font-medium">{{ roll.userName.charAt(0).toUpperCase() }}</span>
             </div>
-            <span class="font-semibold text-sky-300">{{ roll.userName }}</span>
+            <span class="font-semibold text-white">{{ roll.userName }}</span>
           </div>
           <span class="text-xs text-slate-400">
             {{ getFormattedTime(roll.timestamp) }}
@@ -30,7 +30,7 @@
         </div>
         <p class="mt-1 text-slate-200">
           <span v-if="isActionRoll(roll)">
-            Used <span class="font-bold text-sky-400">{{ getActionName(roll) }}</span>
+            Used <span class="font-bold text-white">{{ getActionName(roll) }}</span>
             <div class="mt-1">
               <span v-if="roll.rawDiceResult !== undefined" class="text-sm">
                 Raw dice: <span class="font-bold text-white">{{ roll.rawDiceResult }}</span>, 
@@ -60,7 +60,7 @@
       <div v-if="rolls.length > displayLimit && displayedRolls.length < rolls.length" class="text-center py-4">
         <button 
           @click="loadMore"
-          class="px-4 py-2 bg-sky-600 hover:bg-sky-700 text-white rounded-md text-sm transition-colors"
+          class="px-4 py-2 bg-[#a7357b] hover:bg-sky-700 text-white rounded-md text-sm transition-colors"
         >
           Load More ({{ rolls.length - displayedRolls.length }} remaining)
         </button>

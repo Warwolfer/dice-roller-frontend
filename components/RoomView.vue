@@ -1,7 +1,7 @@
 <template>
-  <div class="p-6 bg-slate-800 rounded-lg shadow-xl">
+  <div class="p-6 bg-transparentbg rounded-lg shadow-xl">
     <div class="flex justify-between items-center mb-4">
-      <h2 class="text-2xl font-bold text-sky-400">{{ room.name }}</h2>
+      <h2 class="text-2xl font-bold text-white">{{ room.name }}</h2>
       <Button @click="onLeaveRoom" variant="secondary" size="sm" :disabled="isLoading">
         Leave Room
       </Button>
@@ -13,7 +13,7 @@
         class="p-4 flex items-center justify-between cursor-pointer hover:bg-slate-700/70 transition-colors rounded-md"
         @click="isRollSectionExpanded = !isRollSectionExpanded"
       >
-        <h3 class="text-lg font-semibold text-sky-400">Roll</h3>
+        <h3 class="text-lg font-semibold text-white">Roll</h3>
         <svg 
           class="w-5 h-5 text-slate-300 transition-transform duration-200"
           :class="{ 'rotate-180': isRollSectionExpanded }"
@@ -36,7 +36,7 @@
             value="dice"
             v-model="rollType"
             :disabled="isLoading"
-            class="text-sky-500 bg-slate-700 border-slate-600 focus:ring-sky-500"
+            class="text-white bg-slate-700 border-slate-600 focus:ring-sky-500"
           />
           <span class="text-slate-300">Dice Roll</span>
         </label>
@@ -46,14 +46,15 @@
             value="action"
             v-model="rollType"
             :disabled="isLoading"
-            class="text-sky-500 bg-slate-700 border-slate-600 focus:ring-sky-500"
+            class="text-white bg-slate-700 border-slate-600 focus:ring-sky-500"
           />
           <span class="text-slate-300">Action Roll</span>
         </label>
       </div>
 
-      <div class="flex flex-col sm:flex-row justify-between items-start gap-4">
-        <div class="flex-grow w-full sm:w-auto">
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Left Column: Form Controls and Button -->
+        <div class="lg:col-span-2 space-y-4">
           <!-- Dice Selector (shown when rollType is 'dice') -->
           <DiceSelector 
             v-if="rollType === 'dice'"
@@ -76,31 +77,54 @@
             @bonusChange="setActionBonus"
           />
           
-          <div class="mt-3">
+          <div>
             <label for="rollComment" class="block text-xs font-medium text-slate-400 mb-1">
-              Comment (optional):
+              Comment:
             </label>
             <input
               id="rollComment"
               type="text"
               v-model="rollComment"
               placeholder="E.g., Attacking the goblin"
+              required
               class="w-full p-2 bg-slate-700 border border-slate-600 rounded-md focus:ring-sky-500 focus:border-sky-500 text-slate-100 text-sm"
               :disabled="isLoading"
               aria-label="Roll comment"
             />
           </div>
+          
+          <Button 
+            @click="handleRoll" 
+            :disabled="isLoading || !userName || (rollType === 'action' && !selectedAction) || !rollComment.trim()" 
+            variant="primary" 
+            size="lg" 
+            class="w-full"
+            aria-live="polite"
+          >
+            {{ buttonText }}
+          </Button>
         </div>
-        <Button 
-          @click="handleRoll" 
-          :disabled="isLoading || !userName || (rollType === 'action' && !selectedAction)" 
-          variant="primary" 
-          size="lg" 
-          class="w-full sm:w-auto sm:self-end mt-3 sm:mt-0"
-          aria-live="polite"
-        >
-          {{ buttonText }}
-        </Button>
+
+        <!-- Right Column: Action Details -->
+        <div class="lg:col-span-1" v-if="rollType === 'action'">
+          <div class="p-3 bg-slate-700/50 rounded-md h-full">
+            <div v-if="selectedAction" class="text-sm space-y-2">
+              <div class="flex justify-between items-start">
+                <span class="font-medium text-white">{{ selectedAction.name }}</span>
+                <span class="text-xs text-slate-400">{{ selectedAction.type }}</span>
+              </div>
+              <div v-if="selectedAction.rollFormula" class="text-xs text-amber-400 font-mono">
+                Formula: {{ selectedAction.rollFormula }}
+              </div>
+              <div class="text-xs text-slate-300 whitespace-pre-line">
+                {{ selectedAction.description }}
+              </div>
+            </div>
+            <div v-else class="text-xs text-slate-400 italic">
+              Select an action to view details
+            </div>
+          </div>
+        </div>
       </div>
         <div 
           v-if="isAnimatingRoll || animatedRollResult !== null" 
@@ -122,6 +146,8 @@
       :participants="room.participants" 
       :current-user-name="userName"
       :selectedParticipantFilter="selectedParticipantFilter"
+      :creatorName="room.creator_name"
+      :creatorTerraRpId="room.creator_terrarp_id"
       @participantSelect="emit('participantSelect', $event)"
     />
 
